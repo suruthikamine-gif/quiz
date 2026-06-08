@@ -22,8 +22,7 @@ export default async function handler(req, res) {
 
   try {
     if (isGeminiConfigured) {
-      // Use Gemini API
-      console.log('Routing request to Gemini API...');
+      // Use Gemini API with auto-fallback models list
       const result = await callGemini(geminiKey, prompt);
       return res.status(200).json(result);
     } else {
@@ -39,38 +38,53 @@ export default async function handler(req, res) {
 }
 
 async function callGemini(apiKey, prompt) {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
-  
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      contents: [{
-        parts: [{ text: prompt }]
-      }],
-      generationConfig: {
-        responseMimeType: 'application/json'
+  // Ordered list of models to try in case of transient overload or availability issues
+  const models = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-3.5-flash'];
+  let lastError = null;
+
+  for (const model of models) {
+    try {
+      console.log(`Attempting quiz generation with Gemini model: ${model}...`);
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+      
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          contents: [{
+            parts: [{ text: prompt }]
+          }],
+          generationConfig: {
+            responseMimeType: 'application/json'
+          }
+        })
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error?.message || `Gemini model ${model} call failed`);
       }
-    })
-  });
 
-  const data = await response.json();
-  if (!response.ok) {
-    throw new Error(data.error?.message || 'Gemini API call failed');
+      const generatedText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (!generatedText) {
+        throw new Error(`Empty response received from Gemini model ${model}`);
+      }
+
+      console.log(`✔ Success using model: ${model}`);
+      return {
+        content: [
+          { text: generatedText }
+        ]
+      };
+    } catch (err) {
+      console.warn(`⚠ Model ${model} failed: ${err.message}. Trying next fallback...`);
+      lastError = err;
+    }
   }
 
-  const generatedText = data.candidates?.[0]?.content?.parts?.[0]?.text;
-  if (!generatedText) {
-    throw new Error('Empty response received from Gemini model');
-  }
-
-  return {
-    content: [
-      { text: generatedText }
-    ]
-  };
+  throw new Error(`All available Gemini models are currently overloaded. Please try again in a few seconds. (Details: ${lastError.message})`);
 }
 
 async function callAnthropic(apiKey, prompt, max_tokens) {
