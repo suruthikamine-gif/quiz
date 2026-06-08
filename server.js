@@ -20,7 +20,7 @@ app.all('/api/generate', (req, res) => {
 });
 
 // Serve static files
-app.use(express.static(__dirname));
+app.use(express.static(path.join(__dirname, 'public')));
 
 app.listen(PORT, () => {
   console.log(`\x1b[32m✔ QuizForge AI local dev server started!\x1b[0m`);
