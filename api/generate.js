@@ -39,7 +39,13 @@ export default async function handler(req, res) {
 
 async function callGemini(apiKey, prompt) {
   // Ordered list of models to try in case of transient overload or availability issues
-  const models = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-3.5-flash'];
+  const models = [
+    'gemini-2.5-flash',
+    'gemini-2.0-flash-lite',
+    'gemini-3.1-flash-lite',
+    'gemini-2.0-flash',
+    'gemini-3.5-flash'
+  ];
   let lastError = null;
 
   for (const model of models) {
